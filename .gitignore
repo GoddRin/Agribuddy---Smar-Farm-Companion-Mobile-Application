@@ -1,0 +1,41 @@
+# Flutter
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+.pub-cache/
+.pub/
+build/
+
+# Android
+android/**/generated/
+android/gen/
+android/local.properties
+android/key.properties
+android/app/src/main/res/values/strings.xml
+android/app/src/main/res/values/google-services.json
+**/*.keystore
+**/*.jks
+
+# iOS
+ios/.generated/
+ios/Flutter/Generated.xcconfig
+ios/Flutter/flutter_export_environment.sh
+ios/Pods/
+ios/Runner/GeneratedPluginRegistrant.h
+ios/Runner/GeneratedPluginRegistrant.m
+
+# IDE
+.idea/
+.vscode/
+*.iml
+*.swp
+*~
+
+# Environment
+.env
+.env.*
+
+# OS
+.DS_Store
+Thumbs.db
