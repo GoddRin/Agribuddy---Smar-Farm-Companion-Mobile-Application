@@ -2,7 +2,6 @@
   "version": 2,
   "public": true,
   "rewrites": [
-    { "handle": "filesystem" },
     { "src": "/(.*)", "dest": "/index.html" }
   ],
   "headers": [
