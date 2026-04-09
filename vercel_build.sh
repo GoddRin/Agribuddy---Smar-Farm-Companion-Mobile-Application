@@ -17,8 +17,8 @@ fi
 # 4. GHOST MODE: "Script Surgery" to bypass the Root check
 # We force the EUID check to always be false so Flutter doesn't quit
 echo "👻 Activating Ghost Mode (Bypassing Root Check)..."
-find flutter/bin/internal -name "*.sh" -exec sed -i 's/if \[\[ "$EUID" == "0"/if false/g' {} + || true
-sed -i 's/if \[\[ "$EUID" == "0"/if false/g' flutter/bin/flutter || true
+find flutter/bin/internal -name "*.sh" -exec sed -i 's/"$EUID" == "0"/"$EUID" == "99999"/g' {} + || true
+sed -i 's/"$EUID" == "0"/"$EUID" == "99999"/g' flutter/bin/flutter || true
 
 # 5. Path Setup
 export PATH="$PATH:`pwd`/flutter/bin"
