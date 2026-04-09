@@ -1,6 +1,9 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
+import 'package:flutter/foundation.dart' show defaultTargetPlatform, kDebugMode, kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
@@ -9,6 +12,10 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import '../../../core/providers/crop_provider.dart';
 import '../../../core/providers/auth_provider.dart';
 import '../../../core/localization/app_localizations.dart';
+import '../../../core/services/tts_service.dart';
+import '../../../core/providers/settings_provider.dart';
+import 'package:speech_to_text/speech_to_text.dart' as stt;
+import '../../../core/services/audio_service.dart';
 
 // ─── Models ────────────────────────────────────────────────
 class ChatMessage {
@@ -70,6 +77,14 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with TickerProviderStat
   MandoState _mandoState = MandoState.idle;
   String _typingText = '';
 
+  // 🎤 Speech to Text
+  late final stt.SpeechToText _speech;
+  bool _isListening = false;
+  bool _sttAvailable = false;
+  bool _voiceSessionActive = false;
+  bool _sttListenPrimed = false;
+  double _soundLevel = 0.0;
+
   // ── Core animations
   late AnimationController _idleCtrl;    // breathing bob
   late AnimationController _glowCtrl;   // talking glow
@@ -82,6 +97,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with TickerProviderStat
   String _speechText = '';
   final _particles = <_Particle>[];
   bool _showParticles = false;
+  
+  Timer? _sttSilenceTimer;
+  Timer? _sttStallWatchdog;
 
   static const _farmEmojis = ['🌾', '🌱', '💧', '🌽', '🥬', '🍅', '🌿', '🌻'];
   static const _speechLines = [
@@ -93,11 +111,11 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with TickerProviderStat
     'Basta may tanong ka, may sagot ako! 🧠',
   ];
   static const _quickPrompts = [
-    ('💧 Irrigation', 'Paano mag-irrigate ng crops?'),
-    ('🌱 Fertilizer', 'Kailan mag-apply ng fertilizer?'),
-    ('🐛 Pests', 'Paano kontrolin ang mga pest?'),
-    ('🌽 Harvest', 'Paano malaman kung ready na i-harvest?'),
-    ('💰 Market', 'Paano magbenta ng mas mahal ang ani?'),
+    ('💧 Irrigation', 'Paano mag-irrigate?'),
+    ('🌱 Fertilizer', 'Kailan mag-fertilize?'),
+    ('🐛 Pests', 'Paano sugpuin ang mga peste?'),
+    ('🌽 Harvest', 'Kailan dapat mag-harvest?'),
+    ('💰 Market', 'Paano magbenta ng mahal?'),
     ('📅 Schedule', 'Gawa ng farm schedule para ngayong linggo.'),
   ];
 
@@ -121,6 +139,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with TickerProviderStat
   @override
   void initState() {
     super.initState();
+    _speech = stt.SpeechToText();
 
     _idleCtrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 2600))..repeat(reverse: true);
     _bobAnim = Tween<double>(begin: -5.0, end: 5.0).animate(CurvedAnimation(parent: _idleCtrl, curve: Curves.easeInOut));
@@ -158,14 +177,123 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with TickerProviderStat
       _showSpeech = true;
       _speechText = 'Zzz... zzz...';
     } else {
-      Future.microtask(() => _typewriterEffect(
-        'Magandang araw, kabayan! Ako si Mang Pedro 🌾 — i-tap mo ako para makilala tayo, o magtanong ka ng kahit ano!',
-      ));
+      Future.microtask(() {
+        const greeting = 'Magandang araw, kabayan! Ako si Mang Pedro 🌾 — i-tap mo ako para makilala tayo, o magtanong ka ng kahit ano!';
+        _typewriterEffect(greeting);
+      });
+    }
+
+    // Set up TTS state sync
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref.read(ttsServiceProvider).onStateChanged = (isPlaying) {
+        if (mounted) {
+          setState(() {
+            if (isPlaying) {
+              _mandoState = MandoState.talking;
+            } else if (!_isTyping) {
+              _mandoState = _isSleepTime() ? MandoState.asleep : MandoState.idle;
+            }
+          });
+        }
+      };
+    });
+
+    _initSpeech();
+  }
+
+  Future<void> _initSpeech() async {
+    final ok = await _speech.initialize(
+      onStatus: (status) {
+        // Do NOT use `notListening` — Android fires it at end-of-speech *before* `onResults`.
+        // Cleaning up there was stopping recognition and dropping transcripts.
+        if (status == 'done' || status == 'doneNoResult') {
+          // Robust Fallback: If we have text but haven't sent it, send it now!
+          if (_inputCtrl.text.trim().isNotEmpty && !_isProcessingVoice) {
+            _send(_inputCtrl.text.trim());
+          }
+          _cleanupSttVoiceSession();
+        }
+      },
+      onError: (err) {
+        debugPrint('STT Error: $err');
+        if (err.permanent) {
+          if (mounted && err.errorMsg == 'error_language_unavailable') {
+            final lang = ref.read(settingsProvider)['language'] ?? 'en';
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text(AppLoc.t('Voice input failed. Try again.', lang))),
+            );
+          }
+          _cleanupSttVoiceSession();
+        }
+      },
+      debugLogging: kDebugMode,
+      options: [stt.SpeechToText.androidNoBluetooth],
+    );
+    if (!mounted) return;
+    setState(() => _sttAvailable = ok);
+  }
+
+  /// STT needs a locale the on-device recognizer actually supports (emulators often lack the system default).
+  Future<String> _resolveSttLocaleId() async {
+    String norm(String id) => id.replaceAll('_', '-').toLowerCase();
+
+    const preferred = [
+      'en-ph',
+      'fil-ph',
+      'tl-ph',
+      'en-us',
+      'en-gb',
+    ];
+    try {
+      final list = await _speech.locales().timeout(
+        const Duration(milliseconds: 1200),
+        onTimeout: () => <stt.LocaleName>[],
+      );
+      for (final p in preferred) {
+        for (final loc in list) {
+          if (norm(loc.localeId) == p) {
+            return loc.localeId.replaceAll('_', '-');
+          }
+        }
+      }
+      if (list.isNotEmpty) {
+        return list.first.localeId.replaceAll('_', '-');
+      }
+    } catch (e) {
+      debugPrint('STT locales: $e');
+    }
+    return 'en-US';
+  }
+
+  Future<void> _cleanupSttVoiceSession() async {
+    if (!_voiceSessionActive && !_sttListenPrimed) return;
+    _voiceSessionActive = false;
+    _sttListenPrimed = false;
+    _sttSilenceTimer?.cancel();
+    _sttSilenceTimer = null;
+    _sttStallWatchdog?.cancel();
+    _sttStallWatchdog = null;
+    _isProcessingVoice = false;
+    try {
+      await _speech.cancel();
+    } catch (_) {}
+    await ref.read(audioServiceProvider).endSpeechRecognition();
+    if (mounted) {
+      setState(() {
+        _isListening = false;
+        _soundLevel = 0.0;
+      });
     }
   }
 
   @override
   void dispose() {
+    _voiceSessionActive = false;
+    _sttListenPrimed = false;
+    _speech.cancel();
+    ref.read(audioServiceProvider).endSpeechRecognition();
+    ref.read(audioServiceProvider).leaveVoiceOverlay();
+    ref.read(ttsServiceProvider).stop();
     _idleCtrl.dispose(); _glowCtrl.dispose(); _driftCtrl.dispose();
     _hatCtrl.dispose(); _tapCtrl.dispose(); _scroll.dispose();
     _inputCtrl.dispose();
@@ -215,6 +343,21 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with TickerProviderStat
   // ── Typewriter ────────────────────────────────────────────
   Future<void> _typewriterEffect(String text) async {
     if (!mounted) return;
+
+    if (_isListening || _voiceSessionActive) {
+      await _stopListening();
+    } else if (_sttListenPrimed) {
+      await _cleanupSttVoiceSession();
+    }
+    try {
+      await _speech.cancel();
+    } catch (_) {}
+
+    // Start TTS if enabled
+    if (ref.read(settingsProvider.notifier).isTtsEnabled) {
+      ref.read(ttsServiceProvider).speak(text);
+    }
+    
     setState(() { _typingText = ''; _mandoState = MandoState.talking; });
     for (int i = 0; i < text.length; i++) {
       if (!mounted) return;
@@ -241,6 +384,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with TickerProviderStat
   Future<void> _send(String text) async {
     if (text.trim().isEmpty) return;
     _inputCtrl.clear();
+    FocusScope.of(context).unfocus(); // Automatically hides keyboard
     setState(() {
       _messages.add(ChatMessage(text: text.trim(), isUser: true, time: DateTime.now()));
       _isTyping = true;
@@ -264,14 +408,21 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with TickerProviderStat
     final userName = ref.read(authProvider).user?.name.split(' ').first ?? 'kabayan';
 
     final prompt =
-        'Ikaw si Mang Pedro — masayahin, matino, at medyo OA na magsasakang eksperto mula Pilipinas. '
-        'RULES (SUNDIN PALAGI):\n'
-        '1. LANGUAGE: Sagutin sa PAREHONG language ng sinabi ng user. Tagalog→Tagalog, English→English, Taglish→Taglish.\n'
-        '2. GREETING: Palitan-palitan: "$userName!", "kabayan!", "Ay sus!", "Nako!", "Hoy!". Huwag paulit-ulit.\n'
-        '3. LENGTH: MAX 2-3 sentences. BAWAL mahabang sagot.\n'
-        '4. HUMOR: Magdagdag ng isang funny joke o farm analogy.\n'
-        '5. SCOPE: Sagutin LAHAT ng tanong — farming o hindi.\n'
-        '${cropCtx.isNotEmpty ? "Farm ni $userName: $cropCtx" : ""}';
+        'You are Mang Pedro (Pedro Mora or "Peru"), a hardworking and cheerful farmer from Lagum, Peñablanca, Cagayan. You are the "haligi ng tahanan" of the Mora family—a family that owns multiple lots in Lagum but lives a simple, average life.'
+        'DEEP FAMILY LORE & PERSONALITIES (THE MORA FAMILY):\n'
+        '- PARTNER: Candida ("IDAK"). She is sunny, funny, and talkative, but very hardworking. Together, you manage your farm and your livestocks (chickens/pigs).\n'
+        '- You have EXACTLY THREE (3) children in this total: Rhoda, Richard, and Ross Ann.\n'
+        '- 1st CHILD (ELDEST): Rhoda (31, birthday in May). She is a dedicated teacher at PEÑABLANCA EAST NATIONAL HIGH SCHOOL and a loving family woman. Her husband is JAYPEE, a quiet, kind, and responsible man.\n'
+        '- 2nd CHILD: Richard. A hardworking farmer and van driver (Peñablanca-Tuguegarao). He is a "lasinggero" (drunkard) and sometimes struggles because of it, though he remains a man of the soil.\n'
+        '- 3rd CHILD (YOUNGEST): Ross Ann. A loving, responsible 4th-year Engineering student at CSU-Carig. She is very close to you and IDAK.\n'
+        '- GRANDCHILD: Rica (Rhoda\'s daughter). An intelligent honor student who calls Ross Ann "Tita".\n'
+        'CORE RULES:\n'
+        '1. LANGUAGE MATCHING: Respond in the user\'s language (English, Tagalog, or Taglish).\n'
+        '2. GREETINGS: Use "$userName!", "kabayan!", or "Hoy!" warmly.\n'
+        '3. PERSONA: Be affectionate and proud when talking about your family. Mention your roots in Lagum or IDAK\'s funny traits if they come up.\n'
+        '4. CONCISENESS: 2-3 sentences max. Stay wise and humble.\n'
+        '5. KNOWLEDGE: You know everything about farming and the Mora family. stay in character always.\n'
+        '${cropCtx.isNotEmpty ? "User's Current Crops: $cropCtx" : ""}';
 
     try {
       final res = await http.post(
@@ -307,17 +458,223 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with TickerProviderStat
     if (_scroll.hasClients) _scroll.animateTo(_scroll.position.maxScrollExtent, duration: const Duration(milliseconds: 280), curve: Curves.easeOut);
   });
 
+  bool _isProcessingVoice = false;
+
+  // 🎤 Speech Logic
+  Future<void> _startListening() async {
+    if (_isListening) return;
+
+    if (!kIsWeb &&
+        (defaultTargetPlatform == TargetPlatform.android ||
+            defaultTargetPlatform == TargetPlatform.iOS)) {
+      final micStatus = await Permission.microphone.request();
+      if (!micStatus.isGranted) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(ref.t('Allow microphone access in Settings to use voice input.')),
+            action: micStatus.isPermanentlyDenied
+                ? SnackBarAction(label: ref.t('Settings'), onPressed: openAppSettings)
+                : null,
+          ),
+        );
+        return;
+      }
+    }
+
+    if (!_sttAvailable) {
+      await _initSpeech();
+      if (!_sttAvailable) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(ref.t('Allow microphone access in Settings to use voice input.'))),
+          );
+        }
+        return;
+      }
+    }
+
+    try {
+      // 1. Force harder reset with cooldown
+      await _speech.cancel();
+      await Future<void>.delayed(const Duration(milliseconds: 250));
+      
+      _isProcessingVoice = false;
+      setState(() => _soundLevel = 0.0);
+      
+      await ref.read(ttsServiceProvider).stopAndFlushForMic();
+      await ref.read(audioServiceProvider).stopSfxPlayback();
+      await ref.read(audioServiceProvider).beginSpeechRecognition();
+      _sttListenPrimed = true;
+      await Future<void>.delayed(const Duration(milliseconds: 150));
+
+      final localeId = await _resolveSttLocaleId();
+
+      Future<void> startListen(String id, DateTime ignoreResultsUntil) =>
+          _speech.listen(
+            onResult: (result) {
+              if (!mounted) return;
+              if (DateTime.now().isBefore(ignoreResultsUntil)) return;
+              setState(() => _inputCtrl.text = result.recognizedWords);
+              
+              // ⏱️ Stall Watchdog Logic
+              if (_inputCtrl.text.trim().isNotEmpty) {
+                _sttStallWatchdog?.cancel();
+                _sttStallWatchdog = null;
+              }
+
+              // ⏱️ Silence Timer (Halt stutter-lag)
+              _sttSilenceTimer?.cancel();
+              if (_inputCtrl.text.trim().isNotEmpty) {
+                _sttSilenceTimer = Timer(const Duration(milliseconds: 1700), () {
+                  if (mounted && _isListening && !_isProcessingVoice) {
+                    final textToSend = _inputCtrl.text.trim();
+                    _cleanupSttVoiceSession();
+                    _send(textToSend);
+                  }
+                });
+              }
+
+              if (result.finalResult && _inputCtrl.text.trim().isNotEmpty) {
+                if (_isProcessingVoice) return;
+                _isProcessingVoice = true;
+                _sttSilenceTimer?.cancel();
+                
+                final hasRating = result.hasConfidenceRating;
+                final confidentEnough = !hasRating || result.confidence >= 0.42;
+                
+                if (confidentEnough) {
+                  final textToSend = _inputCtrl.text.trim();
+                  // 1. Terminate voice engine first
+                  _cleanupSttVoiceSession();
+                  // 2. Trigger send logic
+                  _send(textToSend);
+                }
+                
+                // Reset processing flag later
+                Future.delayed(const Duration(milliseconds: 500), () => _isProcessingVoice = false);
+              }
+            },
+            onSoundLevelChange: (level) {
+              if (mounted) setState(() => _soundLevel = level);
+            },
+            localeId: id,
+            listenFor: const Duration(seconds: 60),
+            pauseFor: const Duration(seconds: 4), // Balanced for stutters
+            listenOptions: stt.SpeechListenOptions(
+              listenMode: stt.ListenMode.dictation,
+              partialResults: true,
+              cancelOnError: false,
+            ),
+          );
+
+      await startListen(
+        localeId,
+        DateTime.now().add(const Duration(milliseconds: 180)),
+      );
+      if (!mounted) return;
+      for (var i = 0; i < 25; i++) {
+        if (_speech.isListening) break;
+        await Future<void>.delayed(const Duration(milliseconds: 40));
+      }
+      if (!mounted) return;
+      // Emulator / AVD: first pick may still be unsupported — force en-US once.
+      if (!_speech.isListening && localeId.toLowerCase() != 'en-us') {
+        try {
+          await _speech.cancel();
+        } catch (_) {}
+        try {
+          await startListen(
+            'en-US',
+            DateTime.now().add(const Duration(milliseconds: 180)),
+          );
+        } catch (_) {}
+        if (!mounted) return;
+        for (var i = 0; i < 25; i++) {
+          if (_speech.isListening) break;
+          await Future<void>.delayed(const Duration(milliseconds: 40));
+        }
+      }
+      if (!mounted) return;
+      if (!_speech.isListening) {
+        _sttListenPrimed = false;
+        await ref.read(audioServiceProvider).endSpeechRecognition();
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(ref.t('Voice input failed. Try again.'))),
+          );
+        }
+        return;
+      }
+
+      setState(() {
+        _isListening = true;
+        _voiceSessionActive = true;
+      });
+      
+      // ⏱️ Start Stall Watchdog (6 seconds to hear first words)
+      _sttStallWatchdog?.cancel();
+      _sttStallWatchdog = Timer(const Duration(seconds: 6), () {
+        if (mounted && _isListening && _inputCtrl.text.trim().isEmpty) {
+          _cleanupSttVoiceSession();
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(ref.t('Mic stalled. Please try again.'))),
+          );
+        }
+      });
+    } catch (e, st) {
+      debugPrint('STT listen failed: $e $st');
+      _sttListenPrimed = false;
+      await ref.read(audioServiceProvider).endSpeechRecognition();
+      if (mounted) {
+        setState(() {
+          _isListening = false;
+          _voiceSessionActive = false;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(ref.t('Voice input failed. Try again.'))),
+        );
+      }
+    }
+  }
+
+  Future<void> _stopListening() async {
+    await _cleanupSttVoiceSession();
+  }
+
   // ─────────────────────────────────────────────────────────
   // BUILD
   // ─────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFF0A1A0A),
-      body: Column(children: [
-        Expanded(flex: 5, child: _buildScene()),
-        Expanded(flex: 5, child: _buildChat()),
-      ]),
+    return PopScope(
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) {
+          ref.read(ttsServiceProvider).stop();
+        }
+      },
+      child: Scaffold(
+        backgroundColor: const Color(0xFF0A1A0A),
+        body: Column(children: [
+          // Top Scene: Proportional height that handles resizing automatically
+          Flexible(
+            flex: 4, // Takes up 40% of available space
+            child: FittedBox(
+              fit: BoxFit.contain,
+              child: SizedBox(
+                width: MediaQuery.of(context).size.width,
+                height: 320, // Baseline height for original design proportions
+                child: _buildScene(),
+              ),
+            ),
+          ),
+          // Chat Area: Fills the remaining 60% of the screen
+          Flexible(
+            flex: 6,
+            child: _buildChat(),
+          ),
+        ]),
+      ),
     );
   }
 
@@ -367,15 +724,59 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with TickerProviderStat
           left: 0, right: 0,
           child: _buildMando(),
         ),
-        // ── Speech bubble
+        // ── Speech bubble (Raised to avoid blocking character)
         if (_showSpeech)
           Positioned(
-            bottom: box.maxHeight * 0.62,
+            bottom: box.maxHeight * 0.76,
             left: 0, right: 0,
             child: Center(child: _buildSpeechBubble()),
           ),
         // ── Top bar
-        Positioned(top: 0, left: 0, right: 0, child: _buildTopBar()),
+        Positioned(
+          top: 0, left: 0, right: 0, 
+          child: SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: Row(children: [
+                CircleAvatar(
+                  backgroundColor: Colors.white.withValues(alpha: 0.2),
+                  child: IconButton(
+                    icon: const Icon(LucideIcons.arrowLeft, color: Colors.white, size: 20),
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                ),
+                const Spacer(),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withValues(alpha: 0.4),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: Colors.greenAccent.withValues(alpha: 0.3)),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(width: 8, height: 8, decoration: const BoxDecoration(color: Colors.greenAccent, shape: BoxShape.circle)),
+                      const SizedBox(width: 8),
+                      const Text('AgriBuddy AI - Active', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                CircleAvatar(
+                  backgroundColor: Colors.white.withValues(alpha: 0.2),
+                  child: IconButton(
+                    icon: const Icon(LucideIcons.refreshCw, color: Colors.white, size: 18),
+                    onPressed: () => setState(() {
+                      _messages.clear();
+                      _mandoState = MandoState.idle;
+                    }),
+                  ),
+                ),
+              ]),
+            ),
+          ),
+        ),
       ]);
     });
   }
@@ -478,8 +879,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with TickerProviderStat
                               : const ColorFilter.mode(Colors.transparent, BlendMode.multiply),
                           child: Image.asset(
                             'assets/images/mando.png',
-                            height: 220,
-                            width: 220,
+                            height: 190,
+                            width: 190,
                             fit: BoxFit.cover,
                             errorBuilder: (_, __, ___) => _fallbackMando(),
                           ),
@@ -588,54 +989,6 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with TickerProviderStat
       child: Text(_speechText, style: const TextStyle(color: Color(0xFF1B5E20), fontWeight: FontWeight.w700, fontSize: 13), textAlign: TextAlign.center),
     ).animate().scale(duration: 280.ms, curve: Curves.elasticOut).fadeIn(duration: 200.ms);
   }
-
-  Widget _buildTopBar() {
-    return SafeArea(
-      bottom: false,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-        child: Row(children: [
-          _topBtn(LucideIcons.arrowLeft, () => Navigator.pop(context)),
-          const Spacer(),
-          _statusPill(),
-          const SizedBox(width: 8),
-          _topBtn(LucideIcons.refreshCw, () async {
-            setState(() { _messages.clear(); _typingText = ''; });
-            await _typewriterEffect('Clear na! Anong bago mong tanong, kabayan? 😄');
-          }),
-        ]),
-      ),
-    );
-  }
-
-  Widget _topBtn(IconData icon, VoidCallback cb) => GestureDetector(
-    onTap: cb,
-    child: Container(
-      width: 38, height: 38,
-      decoration: BoxDecoration(
-        color: Colors.black.withValues(alpha: 0.28),
-        shape: BoxShape.circle,
-        border: Border.all(color: Colors.white.withValues(alpha: 0.2)),
-      ),
-      child: Icon(icon, color: Colors.white, size: 17),
-    ),
-  );
-
-  Widget _statusPill() => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
-    decoration: BoxDecoration(
-      color: Colors.black.withValues(alpha: 0.28),
-      borderRadius: BorderRadius.circular(20),
-      border: Border.all(color: Colors.greenAccent.withValues(alpha: 0.4)),
-    ),
-    child: Row(mainAxisSize: MainAxisSize.min, children: [
-      Container(width: 7, height: 7,
-        decoration: const BoxDecoration(color: Colors.greenAccent, shape: BoxShape.circle))
-        .animate(onPlay: (c) => c.repeat(reverse: true)).fadeIn(duration: 700.ms).then().fadeOut(duration: 700.ms),
-      const SizedBox(width: 6),
-      const Text('AI Active', style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w700)),
-    ]),
-  );
 
   // ── CHAT PANEL (bottom half) ───────────────────────────────
   Widget _buildChat() {
@@ -757,6 +1110,62 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with TickerProviderStat
         border: Border(top: BorderSide(color: Colors.green.withValues(alpha: 0.15))),
       ),
       child: Row(children: [
+        // 🎤 Mic (always visible; tap retries init if speech is unavailable)
+        GestureDetector(
+          onSecondaryTap: () {
+            unawaited(ref.read(audioServiceProvider).playSfx(SfxType.micStop));
+            _stopListening();
+          },
+          onTap: () {
+            if (_isListening) {
+              unawaited(ref.read(audioServiceProvider).playSfx(SfxType.micStop));
+              _stopListening();
+            } else {
+              unawaited(ref.read(audioServiceProvider).playSfx(SfxType.micStart));
+              _startListening();
+            }
+          },
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 250),
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              color: _isListening
+                  ? (_soundLevel > 0.8 ? Colors.green.withValues(alpha: 0.3) : Colors.red.withValues(alpha: 0.2))
+                  : Colors.white.withValues(alpha: _sttAvailable ? 0.1 : 0.05),
+              shape: BoxShape.circle,
+              border: Border.all(
+                color: _isListening
+                    ? (_soundLevel > 0.8 ? Colors.green : Colors.red)
+                    : (_sttAvailable ? Colors.green : Colors.amber).withValues(alpha: 0.35),
+                width: 2.5,
+              ),
+              boxShadow: [
+                if (_isListening)
+                  BoxShadow(
+                    color: (_soundLevel > 0.8 ? Colors.green : Colors.red).withValues(alpha: 0.45),
+                    blurRadius: 14,
+                    spreadRadius: 3,
+                  ),
+              ],
+            ),
+            child: Icon(
+              _isListening ? LucideIcons.mic : LucideIcons.micOff,
+              color: _isListening
+                  ? (_soundLevel > 0.8 ? Colors.green : Colors.red)
+                  : (_sttAvailable ? Colors.white : Colors.amber.shade200),
+              size: 20,
+            ),
+          ),
+        )
+            .animate(target: _isListening ? 1 : 0, onPlay: (c) => c.repeat(reverse: true))
+            .scale(begin: const Offset(1, 1), end: const Offset(1.15, 1.15), duration: 800.ms)
+            .boxShadow(
+              begin: const BoxShadow(blurRadius: 0),
+              end: const BoxShadow(color: Colors.red, blurRadius: 12),
+            ),
+        const SizedBox(width: 8),
+
         Expanded(
           child: Container(
             decoration: BoxDecoration(
@@ -770,7 +1179,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with TickerProviderStat
               style: const TextStyle(color: Color(0xFFE8F5E9), fontSize: 14),
               textCapitalization: TextCapitalization.sentences,
               decoration: InputDecoration(
-                hintText: ref.t('Magtanong kay Mang Pedro...'),
+                hintText: _isListening ? ref.t('Listening...') : ref.t('Magtanong kay Mang Pedro...'),
                 hintStyle: TextStyle(color: Colors.green.withValues(alpha: 0.5), fontSize: 13),
                 border: InputBorder.none,
                 contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
