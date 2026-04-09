@@ -1,31 +1,29 @@
 #!/bin/bash
 
-# 1. Exit immediately if a command exits with a non-zero status
+# 1. Stop on any error
 set -e
 
-echo "快速开始: Installing Flutter SDK (Shallow Clone for speed)..."
+echo "📦 Downloading Flutter Power-Pack (Stable Linux SDK)..."
 
-# 2. Only clone the latest stable commit to save memory/time
-if [ ! -d "flutter" ]; then
-  git clone https://github.com/flutter/flutter.git -b stable --depth 1
-fi
+# 2. Download a pre-compiled version directly (Faster and more reliable than git clone)
+# Using 3.22.2 as a known stable target
+curl -O https://storage.googleapis.com/flutter_infra_release/releases/stable/linux/flutter_linux_3.22.2-stable.tar.xz
 
-# 3. Add Flutter to the path
+echo "🔓 Unwrapping the engine..."
+tar xf flutter_linux_3.22.2-stable.tar.xz
+
+# 3. Add to path
 export PATH="$PATH:`pwd`/flutter/bin"
 
-echo "⚙️ Configuring Flutter Web..."
+echo "⚙️ Configuring Web..."
 flutter config --no-analytics
 flutter config --enable-web
 
-# 4. Pre-download the Web SDK to avoid timeouts during build
-echo "🚚 Pre-loading Web SDK..."
-flutter precache --web
-
-# 5. Build
-echo "📦 Fetching packages..."
+# 4. Fetch packages and build
+echo "📦 Fetching AgriBuddy packages..."
 flutter pub get
 
-echo "🚀 Building Web Release..."
+echo "🚀 Compiling Web Production Build..."
 flutter build web --release --base-href /
 
-echo "✅ Build Complete! Files are ready in build/web"
+echo "✅ Success! AgriBuddy is ready for Vercel."
