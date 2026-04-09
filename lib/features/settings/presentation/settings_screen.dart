@@ -231,7 +231,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       Switch(
         value: value,
         onChanged: onChanged,
-        activeThumbColor: const Color(0xFF16A34A),
+        activeColor: const Color(0xFF16A34A),
       ),
     ],
   );
