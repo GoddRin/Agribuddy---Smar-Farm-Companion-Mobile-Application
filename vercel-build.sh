@@ -4,6 +4,13 @@
 echo "Installing Flutter..."
 git clone https://github.com/flutter/flutter.git -b stable --depth 1
 
+# --- GHOST MODE START ---
+# Vercel forces root access, but modern Flutter SDK explicitly blocks root builds.
+# We bypass the internal root checks inside the Flutter CLI directly using sed.
+echo "Bypassing Flutter root checks..."
+sed -i 's/if \[\[ "\$EUID" == "0" \]\]; then/if false; then/' ./flutter/bin/internal/shared.sh
+# --- GHOST MODE END ---
+
 # 2. Add to PATH
 export PATH="$PATH:`pwd`/flutter/bin"
 
