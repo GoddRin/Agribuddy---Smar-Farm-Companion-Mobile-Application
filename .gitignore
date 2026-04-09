@@ -6,7 +6,6 @@
 .pub-cache/
 .pub/
 build/
-!build/web/
 
 # Android
 android/**/generated/
@@ -34,7 +33,8 @@ ios/Runner/GeneratedPluginRegistrant.m
 *~
 
 # Environment
-.env
+# .env is tracked because Flutter needs it as a bundled asset
+!.env
 .env.*
 
 # OS

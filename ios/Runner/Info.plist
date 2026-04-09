@@ -59,6 +59,10 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>AgriBuddy needs the microphone for voice chat with Mang Pedro.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>AgriBuddy converts your speech to text for the AI assistant.</string>
 	<key>UISupportedInterfaceOrientations~ipad</key>
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>

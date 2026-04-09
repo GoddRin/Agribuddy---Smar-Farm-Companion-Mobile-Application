@@ -137,8 +137,8 @@ class TtsService {
 
       await _tts.stop();
 
-      await _tts.setPitch(0.95);
-      await _tts.setSpeechRate(0.48);
+      await _tts.setPitch(0.82);
+      await _tts.setSpeechRate(0.45);
       await _tts.setVolume(settings.voiceVolume);
 
       final cleanedText = text
