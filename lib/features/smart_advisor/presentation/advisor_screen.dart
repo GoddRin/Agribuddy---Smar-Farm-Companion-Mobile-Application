@@ -1,4 +1,5 @@
-import 'dart:io';
+import 'dart:typed_data';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_icons/lucide_icons.dart';
@@ -8,7 +9,7 @@ import 'package:image_picker/image_picker.dart';
 // State management for intelligent diagnosis
 final isAnalyzingProvider = StateProvider<bool>((ref) => false);
 final analysisResultProvider = StateProvider<String?>((ref) => null);
-final selectedImageProvider = StateProvider<File?>((ref) => null);
+final selectedImageBytesProvider = StateProvider<Uint8List?>((ref) => null);
 
 class SmartAdvisorScreen extends ConsumerStatefulWidget {
   const SmartAdvisorScreen({super.key});
@@ -25,7 +26,8 @@ class _SmartAdvisorScreenState extends ConsumerState<SmartAdvisorScreen> {
     try {
       final XFile? pickedFile = await _picker.pickImage(source: source);
       if (pickedFile != null) {
-        ref.read(selectedImageProvider.notifier).state = File(pickedFile.path);
+        final bytes = await pickedFile.readAsBytes();
+        ref.read(selectedImageBytesProvider.notifier).state = bytes;
         _processImage();
       }
     } catch (e) {
@@ -55,11 +57,12 @@ class _SmartAdvisorScreenState extends ConsumerState<SmartAdvisorScreen> {
                       title: const Text('Choose from Gallery'),
                       onTap: () => _pickImage(ImageSource.gallery),
                     ),
-                    ListTile(
-                      leading: const Icon(LucideIcons.camera),
-                      title: const Text('Take a Photo'),
-                      onTap: () => _pickImage(ImageSource.camera),
-                    ),
+                    if (!kIsWeb)
+                      ListTile(
+                        leading: const Icon(LucideIcons.camera),
+                        title: const Text('Take a Photo'),
+                        onTap: () => _pickImage(ImageSource.camera),
+                      ),
                   ],
                 ),
               ),
@@ -89,11 +92,11 @@ class _SmartAdvisorScreenState extends ConsumerState<SmartAdvisorScreen> {
     final theme = Theme.of(context);
     final isAnalyzing = ref.watch(isAnalyzingProvider);
     final analysisResult = ref.watch(analysisResultProvider);
-    final selectedImage = ref.watch(selectedImageProvider);
+    final selectedImageBytes = ref.watch(selectedImageBytesProvider);
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Smart Crop Advisor'),
+        title: const Text('AgriBuddy Advisor'),
         flexibleSpace: Container(
           decoration: BoxDecoration(
             gradient: LinearGradient(
@@ -126,11 +129,11 @@ class _SmartAdvisorScreenState extends ConsumerState<SmartAdvisorScreen> {
             GestureDetector(
               onTap: isAnalyzing ? null : _showPickerBottomSheet,
               child: Container(
-                height: selectedImage != null ? 280 : 200,
+                height: selectedImageBytes != null ? 280 : 200,
                 decoration: BoxDecoration(
                   color: theme.colorScheme.primary.withValues(alpha: 0.05),
                   border: Border.all(
-                    color: selectedImage != null
+                    color: selectedImageBytes != null
                         ? Colors.transparent
                         : theme.colorScheme.primary.withValues(alpha: 0.5),
                     width: 2,
@@ -138,14 +141,14 @@ class _SmartAdvisorScreenState extends ConsumerState<SmartAdvisorScreen> {
                   ),
                   borderRadius: BorderRadius.circular(24),
                 ),
-                child: selectedImage != null
+                child: selectedImageBytes != null
                     ? ClipRRect(
                         borderRadius: BorderRadius.circular(22),
                         child: Stack(
                           fit: StackFit.expand,
                           children: [
-                            Image.file(
-                              selectedImage,
+                            Image.memory(
+                              selectedImageBytes,
                               fit: BoxFit.cover,
                             ),
                             if (!isAnalyzing)
