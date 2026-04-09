@@ -19,8 +19,9 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
     final expenses = ref.watch(expensesProvider);
     final notifier = ref.read(expensesProvider.notifier);
     final theme = Theme.of(context);
+    final totalMonth = notifier.totalThisMonth;
+    final totalAllTime = notifier.totalAllTime;
     final byCategory = notifier.thisMonthByCategory;
-    final total = notifier.totalThisMonth;
 
     return Scaffold(
       appBar: AppBar(title: Text(ref.t('Expense Tracker')), actions: [
@@ -28,33 +29,37 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
       ]),
       body: expenses.isEmpty
           ? Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
-              Icon(LucideIcons.dollarSign, size: 64, color: Colors.grey[300]),
+              Icon(LucideIcons.coins, size: 64, color: Colors.grey[300]),
               const SizedBox(height: 12),
               Text(ref.t('No expenses yet'), style: TextStyle(color: Colors.grey[500])),
               const SizedBox(height: 16),
               ElevatedButton.icon(icon: const Icon(LucideIcons.plus), label: Text(ref.t('Add Expense')), onPressed: () => _openAddSheet(context, ref)),
             ]))
           : ListView(padding: const EdgeInsets.all(16), children: [
-              // Monthly summary card
-              Container(
-                padding: const EdgeInsets.all(20),
-                decoration: BoxDecoration(
-                  gradient: const LinearGradient(colors: [Color(0xFF1E40AF), Color(0xFF2563EB)]),
-                  borderRadius: BorderRadius.circular(24),
-                ),
-                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text(ref.t('This Month'), style: const TextStyle(color: Colors.white70, fontSize: 13)),
-                  const SizedBox(height: 8),
-                  Text('₱${total.toStringAsFixed(2)}',
-                    style: const TextStyle(color: Colors.white, fontSize: 32, fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 4),
-                  Text('${ref.t('Total expenses')}: ${expenses.where((e) {
-                    final now = DateTime.now();
-                    final d = DateTime.tryParse(e.date);
-                    return d != null && d.month == now.month && d.year == now.year;
-                  }).length}', style: const TextStyle(color: Colors.white60, fontSize: 12)),
+              // Summary cards
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(children: [
+                  _SummaryCard(
+                    title: ref.t('This Month'),
+                    amount: totalMonth,
+                    count: expenses.where((e) {
+                      final now = DateTime.now();
+                      final d = DateTime.tryParse(e.date);
+                      return d != null && d.month == now.month && d.year == now.year;
+                    }).length,
+                    colors: const [Color(0xFF1E40AF), Color(0xFF2563EB)],
+                  ),
+                  const SizedBox(width: 12),
+                  _SummaryCard(
+                    title: ref.t('Total Investment'),
+                    amount: totalAllTime,
+                    count: expenses.length,
+                    colors: const [Color(0xFF065F46), Color(0xFF059669)],
+                    isAllTime: true,
+                  ),
                 ]),
-              ).animate().fadeIn().slideY(begin: -0.1),
+              ).animate().fadeIn().slideX(begin: 0.1),
               const SizedBox(height: 20),
 
               // Bar chart by category
@@ -123,6 +128,51 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
   }
 }
 
+class _SummaryCard extends StatelessWidget {
+  final String title;
+  final double amount;
+  final int count;
+  final List<Color> colors;
+  final bool isAllTime;
+
+  const _SummaryCard({
+    required this.title,
+    required this.amount,
+    required this.count,
+    required this.colors,
+    this.isAllTime = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 260,
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(colors: colors, begin: Alignment.topLeft, end: Alignment.bottomRight),
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: [BoxShadow(color: colors.first.withValues(alpha: 0.2), blurRadius: 12, offset: const Offset(0, 6))],
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          Text(title, style: const TextStyle(color: Colors.white70, fontSize: 13, fontWeight: FontWeight.w500)),
+          const Spacer(),
+          Icon(isAllTime ? LucideIcons.infinity : LucideIcons.calendar, color: Colors.white38, size: 16),
+        ]),
+        const SizedBox(height: 12),
+        FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Text('₱${amount.toStringAsFixed(2)}',
+            style: const TextStyle(color: Colors.white, fontSize: 28, fontWeight: FontWeight.w900, letterSpacing: -0.5)),
+        ),
+        const SizedBox(height: 8),
+        Text('$count ${count == 1 ? 'transaction' : 'transactions'}', 
+          style: const TextStyle(color: Colors.white60, fontSize: 12)),
+      ]),
+    );
+  }
+}
+
 class _ExpenseCard extends ConsumerWidget {
   final ExpenseItem expense;
   const _ExpenseCard({required this.expense});
@@ -146,7 +196,7 @@ class _ExpenseCard extends ConsumerWidget {
         child: Row(children: [
           Container(width: 40, height: 40,
             decoration: BoxDecoration(color: color.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(12)),
-            child: Icon(LucideIcons.dollarSign, color: color, size: 18)),
+            child: Icon(_icon(expense.category), color: color, size: 18)),
           const SizedBox(width: 12),
           Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text(ref.t(expense.category), style: const TextStyle(fontWeight: FontWeight.bold)),
@@ -159,6 +209,18 @@ class _ExpenseCard extends ConsumerWidget {
     );
   }
 
+  IconData _icon(String cat) {
+    switch (cat) {
+      case 'Seeds': return LucideIcons.leaf;
+      case 'Fertilizer': return LucideIcons.beaker;
+      case 'Pesticides': return LucideIcons.shieldAlert;
+      case 'Labor': return LucideIcons.users;
+      case 'Transport': return LucideIcons.truck;
+      case 'Equipment': return LucideIcons.wrench;
+      default: return LucideIcons.moreHorizontal;
+    }
+  }
+
   Color _color(String cat) {
     switch (cat) {
       case 'Seeds': return Colors.green;
@@ -166,6 +228,7 @@ class _ExpenseCard extends ConsumerWidget {
       case 'Pesticides': return Colors.red;
       case 'Labor': return Colors.blue;
       case 'Transport': return Colors.purple;
+      case 'Equipment': return Colors.teal;
       default: return Colors.grey;
     }
   }
@@ -216,7 +279,7 @@ class _AddExpenseSheetState extends State<_AddExpenseSheet> {
         ),
         const SizedBox(height: 12),
         TextField(controller: _amountCtrl, keyboardType: const TextInputType.numberWithOptions(decimal: true), autofocus: true,
-          decoration: InputDecoration(labelText: '${widget.ref.t('Amount')} (₱)', prefixIcon: const Icon(LucideIcons.dollarSign, size: 18), border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)))),
+          decoration: InputDecoration(labelText: '${widget.ref.t('Amount')} (₱)', prefixIcon: const Icon(LucideIcons.coins, size: 18), border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)))),
         const SizedBox(height: 12),
         GestureDetector(
           onTap: () async {

@@ -23,6 +23,8 @@ class LogsNotifier extends StateNotifier<List<LogEntry>> {
       return d != null && d.isAfter(weekAgo);
     }).toList();
   }
+
+  bool get hasUnsynced => state.any((l) => !l.isSynced);
 }
 
 final logsProvider = StateNotifierProvider<LogsNotifier, List<LogEntry>>(

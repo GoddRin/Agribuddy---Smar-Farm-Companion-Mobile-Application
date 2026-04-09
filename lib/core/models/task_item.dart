@@ -15,6 +15,7 @@ class TaskItem {
   final String? cropName;
   bool isCompleted;
   final String repeat;
+  bool isSynced;
 
   TaskItem({
     required this.id,
@@ -26,6 +27,7 @@ class TaskItem {
     this.cropName,
     this.isCompleted = false,
     this.repeat = 'None',
+    this.isSynced = false,
   });
 
   bool get isOverdue {
@@ -47,6 +49,7 @@ class TaskItem {
     'dueDate': dueDate, 'dueTime': dueTime,
     'cropId': cropId, 'cropName': cropName,
     'isCompleted': isCompleted, 'repeat': repeat,
+    'isSynced': isSynced,
   };
 
   factory TaskItem.fromJson(Map<String, dynamic> j) => TaskItem(
@@ -54,5 +57,6 @@ class TaskItem {
     dueDate: j['dueDate'], dueTime: j['dueTime'] ?? '08:00',
     cropId: j['cropId'], cropName: j['cropName'],
     isCompleted: j['isCompleted'] ?? false, repeat: j['repeat'] ?? 'None',
+    isSynced: j['isSynced'] ?? false,
   );
 }

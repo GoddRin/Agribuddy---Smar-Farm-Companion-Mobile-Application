@@ -31,6 +31,8 @@ class TasksNotifier extends StateNotifier<List<TaskItem>> {
 
   List<TaskItem> get pendingTasks =>
       state.where((t) => !t.isCompleted).toList();
+
+  bool get hasUnsynced => state.any((t) => !t.isSynced);
 }
 
 final tasksProvider = StateNotifierProvider<TasksNotifier, List<TaskItem>>(

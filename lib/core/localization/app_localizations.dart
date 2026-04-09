@@ -123,6 +123,9 @@ class AppLoc {
     'Set Key': 'I-set',
     'AI Active': 'AI Konektado',
     'Pattern Match': 'Offline AI',
+    'Allow microphone access in Settings to use voice input.':
+        'Payagan ang mikropono sa Settings para sa voice input.',
+    'Voice input failed. Try again.': 'Hindi gumana ang voice. Subukan ulit.',
 
     // Common
     'Save': 'I-save',

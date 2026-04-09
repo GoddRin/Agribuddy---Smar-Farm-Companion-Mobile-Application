@@ -1,13 +1,31 @@
+import 'dart:async' show unawaited;
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lucide_icons/lucide_icons.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../core/services/audio_service.dart';
 
-class MainShell extends StatelessWidget {
+class MainShell extends ConsumerStatefulWidget {
   final Widget child;
   const MainShell({super.key, required this.child});
 
   @override
+  ConsumerState<MainShell> createState() => _MainShellState();
+}
+
+class _MainShellState extends ConsumerState<MainShell> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref.read(audioServiceProvider).startBgm();
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final ref = this.ref; // Re-alias for convenience or use it directly
     final loc = GoRouterState.of(context).uri.path;
     int idx = 0;
     if (loc.startsWith('/home/crops'))  idx = 1;
@@ -18,7 +36,7 @@ class MainShell extends StatelessWidget {
     const primary = Color(0xFF16A34A);
 
     return Scaffold(
-      body: child,
+      body: widget.child,
       bottomNavigationBar: Container(
         decoration: BoxDecoration(
           boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.06), blurRadius: 16, offset: const Offset(0, -4))],
@@ -27,6 +45,7 @@ class MainShell extends StatelessWidget {
           selectedIndex: idx,
           labelBehavior: NavigationDestinationLabelBehavior.onlyShowSelected,
           onDestinationSelected: (i) {
+            unawaited(ref.read(audioServiceProvider).playSfx(SfxType.tap));
             switch (i) {
               case 0: context.go('/home/dashboard'); break;
               case 1: context.go('/home/crops');     break;

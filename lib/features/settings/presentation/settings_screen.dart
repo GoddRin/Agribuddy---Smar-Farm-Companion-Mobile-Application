@@ -5,6 +5,8 @@ import 'package:lucide_icons/lucide_icons.dart';
 import '../../../core/providers/settings_provider.dart';
 import '../../../core/providers/auth_provider.dart';
 import '../../../core/localization/app_localizations.dart';
+import '../../../core/services/audio_service.dart';
+import '../../../core/services/tts_service.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
@@ -110,6 +112,87 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 },
               ),
             ]),
+
+            const Divider(height: 24),
+
+            // Sound Effects Toggle
+            _toggleRow(
+              ref.t('Sound Effects'), 
+              LucideIcons.volume2, 
+              settings['isSoundEnabled'] != 'false',
+              (v) => ref.read(settingsProvider.notifier).toggleSound(v),
+            ),
+
+            const SizedBox(height: 12),
+
+            // Background Music Toggle
+            _toggleRow(
+              ref.t('Background Music'), 
+              LucideIcons.music, 
+              settings['isMusicEnabled'] != 'false',
+              (v) {
+                ref.read(settingsProvider.notifier).toggleMusic(v);
+                if (v) {
+                  ref.read(audioServiceProvider).startBgm();
+                } else {
+                  ref.read(audioServiceProvider).stopBgm();
+                }
+              },
+            ),
+
+            const SizedBox(height: 12),
+
+            // AI Voice Toggle
+            _toggleRow(
+              ref.t('AI Voice (TTS)'), 
+              LucideIcons.mic, 
+              settings['isTtsEnabled'] != 'false',
+              (v) => ref.read(settingsProvider.notifier).toggleTts(v),
+            ),
+            
+            if (settings['isTtsEnabled'] != 'false') ...[
+              const SizedBox(height: 8),
+              Center(
+                child: TextButton.icon(
+                  onPressed: () => ref.read(ttsServiceProvider).speak("Testing AI voice. Kumusta ka, kabayan?"),
+                  icon: const Icon(LucideIcons.volume1, size: 16, color: Color(0xFF16A34A)),
+                  label: Text(ref.t('Test Voice'), style: const TextStyle(color: Color(0xFF16A34A), fontSize: 13, fontWeight: FontWeight.w600)),
+                  style: TextButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    backgroundColor: const Color(0xFF16A34A).withValues(alpha: 0.1),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                ),
+              ),
+            ],
+            
+            const Divider(height: 32),
+            Text(ref.t('Volume Levels'), style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey)),
+            const SizedBox(height: 12),
+            
+            // Music Volume
+            _volumeSlider(
+              ref.t('Music'),
+              LucideIcons.music,
+              ref.watch(settingsProvider.notifier).musicVolume,
+              (v) => ref.read(settingsProvider.notifier).setMusicVolume(v),
+            ),
+            
+            // SFX Volume
+            _volumeSlider(
+              ref.t('SFX'),
+              LucideIcons.volume2,
+              ref.watch(settingsProvider.notifier).sfxVolume,
+              (v) => ref.read(settingsProvider.notifier).setSfxVolume(v),
+            ),
+            
+            // Voice Volume
+            _volumeSlider(
+              ref.t('Voice'),
+              LucideIcons.mic,
+              ref.watch(settingsProvider.notifier).voiceVolume,
+              (v) => ref.read(settingsProvider.notifier).setVoiceVolume(v),
+            ),
           ]),
         ).animate().fadeIn(delay: 50.ms),
         const SizedBox(height: 16),
@@ -137,5 +220,39 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       const SizedBox(width: 8),
       Expanded(child: Text(value, style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 13))),
     ],
+  );
+
+  Widget _toggleRow(String label, IconData icon, bool value, Function(bool) onChanged) => Row(
+    children: [
+      Icon(icon, size: 16, color: Colors.grey[600]),
+      const SizedBox(width: 10),
+      Text(label, style: const TextStyle(fontWeight: FontWeight.w500)),
+      const Spacer(),
+      Switch(
+        value: value,
+        onChanged: onChanged,
+        activeThumbColor: const Color(0xFF16A34A),
+      ),
+    ],
+  );
+
+  Widget _volumeSlider(String label, IconData icon, double value, Function(double) onChanged) => Padding(
+    padding: const EdgeInsets.only(bottom: 12),
+    child: Row(
+      children: [
+        Icon(icon, size: 14, color: Colors.grey[500]),
+        const SizedBox(width: 10),
+        SizedBox(width: 50, child: Text(label, style: const TextStyle(fontSize: 13))),
+        Expanded(
+          child: Slider(
+            value: value,
+            onChanged: onChanged,
+            activeColor: const Color(0xFF16A34A),
+            inactiveColor: Colors.grey[200],
+          ),
+        ),
+        Text('${(value * 100).toInt()}%', style: TextStyle(color: Colors.grey[600], fontSize: 11, fontWeight: FontWeight.bold)),
+      ],
+    ),
   );
 }

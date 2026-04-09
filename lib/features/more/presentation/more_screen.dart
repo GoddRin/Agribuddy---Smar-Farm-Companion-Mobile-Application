@@ -18,7 +18,7 @@ class MoreScreen extends ConsumerWidget {
       _MoreItem(LucideIcons.calendar,      ref.t('Calendar'),        ref.t('Monthly farm schedule'), Colors.orange,  '/calendar'),
       _MoreItem(LucideIcons.dollarSign,     ref.t('Expense Tracker'), ref.t('Track all farm costs'),  Colors.blue,    '/expenses'),
       _MoreItem(LucideIcons.barChart2,      ref.t('Reports'),         ref.t('Analytics & summaries'), Colors.purple,  '/reports'),
-      _MoreItem(LucideIcons.settings,       ref.t('Settings'),        ref.t('API keys & preferences'),Colors.grey,    '/settings'),
+      _MoreItem(LucideIcons.settings,       ref.t('Settings'),        ref.t('App preferences & themes'),Colors.grey,    '/settings'),
     ];
 
     return Scaffold(

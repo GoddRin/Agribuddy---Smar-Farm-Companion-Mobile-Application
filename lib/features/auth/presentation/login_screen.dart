@@ -37,7 +37,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       context.go('/home/dashboard');
     }
   }
-
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -145,7 +144,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     ),
                   ).animate().fadeIn(delay: 200.ms).slideY(begin: 0.1),
 
-                  const SizedBox(height: 24),
+                  const SizedBox(height: 36),
+                  
                   Row(mainAxisAlignment: MainAxisAlignment.center, children: [
                     Text(ref.t("Don't have an account? "), style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[600])),
                     GestureDetector(

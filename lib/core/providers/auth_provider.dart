@@ -1,6 +1,8 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../hive/hive_service.dart';
 import '../models/user_model.dart';
+import '../services/auth_service.dart';
 
 enum AuthStatus { loading, authenticated, unauthenticated }
 
@@ -12,12 +14,18 @@ class AuthState {
 }
 
 class AuthNotifier extends StateNotifier<AuthState> {
-  AuthNotifier() : super(const AuthState(status: AuthStatus.loading)) {
+  final Ref _ref;
+  AuthNotifier(this._ref) : super(const AuthState(status: AuthStatus.loading)) {
     _init();
   }
 
   void _init() {
     final user = HiveService.currentUser;
+    if (user != null) {
+      debugPrint("Auth Init: User recognized -> ${user.username}");
+    } else {
+      debugPrint("Auth Init: No active session found.");
+    }
     state = AuthState(
       status: user != null ? AuthStatus.authenticated : AuthStatus.unauthenticated,
       user: user,
@@ -66,11 +74,13 @@ class AuthNotifier extends StateNotifier<AuthState> {
     if (cur == null) return;
     final updated = UserModel(
       id: cur.id,
-      password: cur.password,
-      email: cur.email,
       name: name.trim(),
       username: username.toLowerCase().trim(),
       farmName: farmName.trim(),
+      email: cur.email,
+      password: cur.password,
+      googleId: cur.googleId,
+      phoneNumber: cur.phoneNumber,
     );
     await HiveService.saveUser(updated);
     await HiveService.saveSession(updated);
@@ -78,11 +88,15 @@ class AuthNotifier extends StateNotifier<AuthState> {
   }
 
   Future<void> logout() async {
-    await HiveService.clearSession();
-    state = const AuthState(status: AuthStatus.unauthenticated);
+    try {
+      await _ref.read(authServiceProvider).signOut();
+      await HiveService.clearSession();
+    } finally {
+      state = const AuthState(status: AuthStatus.unauthenticated);
+    }
   }
 }
 
 final authProvider = StateNotifierProvider<AuthNotifier, AuthState>(
-  (ref) => AuthNotifier(),
+  (ref) => AuthNotifier(ref),
 );

@@ -9,6 +9,8 @@ import '../../../core/providers/logs_provider.dart';
 import '../../../core/providers/tasks_provider.dart';
 import '../../../core/localization/app_localizations.dart';
 import '../../../core/providers/settings_provider.dart';
+import '../../../core/providers/expenses_provider.dart';
+import '../../../core/providers/connectivity_provider.dart';
 
 class DashboardScreen extends ConsumerWidget {
   const DashboardScreen({super.key});
@@ -80,6 +82,8 @@ class DashboardScreen extends ConsumerWidget {
                       ],
                     )),
                     _themeButton(context, ref),
+                    const SizedBox(width: 8),
+                    _syncIndicator(context, ref),
                     const SizedBox(width: 8),
                     _bellButton(context, ref),
                   ],
@@ -190,8 +194,8 @@ class DashboardScreen extends ConsumerWidget {
                       crossAxisSpacing: 16, mainAxisSpacing: 16,
                       childAspectRatio: 1.65,
                       children: [
-                        _actionCard(context, LucideIcons.dollarSign, ref.t('Expense Tracker'), 'Finance', Colors.blue, '/expenses'),
-                        _actionCard(context, LucideIcons.messageSquare, ref.t('Smart Advisor'), 'Advisor', Colors.green, '/chat'),
+                        _actionCard(context, LucideIcons.coins, ref.t('Expense Tracker'), 'Finance', Colors.blue, '/expenses'),
+                        _actionCard(context, LucideIcons.messageSquare, ref.t('Mang Pedro'), 'AI Assistant', Colors.green, '/chat'),
                         _actionCard(context, LucideIcons.barChart2, ref.t('Reports'), 'Analytics', Colors.purple, '/reports'),
                         _actionCard(context, LucideIcons.calendar, ref.t('Farm Calendar'), 'Schedule', Colors.orange, '/calendar'),
                         _actionCard(context, LucideIcons.settings, ref.t('Account Settings'), 'Profile', Colors.teal, '/profile'),
@@ -355,6 +359,64 @@ class DashboardScreen extends ConsumerWidget {
         },
       ),
     ).animate().fadeIn().scale(delay: 100.ms);
+  }
+
+  Widget _syncIndicator(BuildContext context, WidgetRef ref) {
+    final hasUnsyncedLogs = ref.watch(logsProvider.notifier).hasUnsynced;
+    final hasUnsyncedTasks = ref.watch(tasksProvider.notifier).hasUnsynced;
+    final hasUnsyncedExpenses = ref.watch(expensesProvider.notifier).hasUnsynced;
+    final connectivity = ref.watch(connectivityProvider);
+    
+    final hasUnsynced = hasUnsyncedLogs || hasUnsyncedTasks || hasUnsyncedExpenses;
+    final isOnline = connectivity == ConnectivityStatus.isConnected;
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    
+    Color iconColor;
+    IconData iconData;
+    String tooltipMsg;
+    String snackMsg;
+
+    if (!isOnline) {
+      iconColor = isDark ? Colors.grey[500]! : Colors.grey[600]!;
+      iconData = LucideIcons.cloudOff; 
+      tooltipMsg = ref.t('Offline - Sync paused');
+      snackMsg = ref.t('You are in offline mode. Syncing will resume when online.');
+    } else if (hasUnsynced) {
+      iconColor = Colors.orange;
+      iconData = LucideIcons.uploadCloud; 
+      tooltipMsg = ref.t('Local data ready to sync');
+      snackMsg = ref.t('You are online. Your data is being queued for cloud sync.');
+    } else {
+      iconColor = Colors.green;
+      iconData = LucideIcons.cloud;
+      tooltipMsg = ref.t('All data synced');
+      snackMsg = ref.t('Your farm data is securely backed up in the cloud.');
+    }
+
+    return Container(
+      decoration: BoxDecoration(
+        color: theme.cardTheme.color,
+        shape: BoxShape.circle,
+        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 8)],
+      ),
+      child: Tooltip(
+        message: tooltipMsg,
+        child: Stack(alignment: Alignment.center, children: [
+          IconButton(
+            icon: Icon(iconData, color: iconColor, size: 20),
+            onPressed: () {
+              ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                content: Text(snackMsg),
+                behavior: SnackBarBehavior.floating,
+              ));
+            },
+          ),
+          if (hasUnsynced && isOnline) 
+            Positioned(top: 12, right: 12, child: Container(width: 6, height: 6, decoration: const BoxDecoration(color: Colors.orange, shape: BoxShape.circle))),
+        ]),
+      ),
+    ).animate().fadeIn(delay: 150.ms).scale();
   }
 
   Widget _statCard(BuildContext context, WidgetRef ref, {required IconData icon, required String label, required String value, required Color color, required int delay}) {

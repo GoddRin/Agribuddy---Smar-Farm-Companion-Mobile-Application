@@ -69,7 +69,7 @@ class ReportsScreen extends ConsumerWidget {
           const SizedBox(width: 12),
           _summaryCard(theme, label: ref.t('Total Logs'), value: '${logs.length}', icon: LucideIcons.clipboardList, color: Colors.teal),
           const SizedBox(width: 12),
-          _summaryCard(theme, label: ref.t('Spending'), value: '₱${totalExpenses.toStringAsFixed(0)}', icon: LucideIcons.dollarSign, color: Colors.blue),
+          _summaryCard(theme, label: ref.t('Spending'), value: '₱${totalExpenses.toStringAsFixed(0)}', icon: LucideIcons.coins, color: Colors.blue),
         ]).animate().fadeIn(delay: 100.ms),
         const SizedBox(height: 20),
 

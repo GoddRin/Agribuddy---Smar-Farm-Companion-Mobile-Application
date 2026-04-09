@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import '../models/user_model.dart';
 import '../models/log_entry.dart';
@@ -28,6 +29,11 @@ class HiveService {
     // Pre-seed Gemini key if not already set
     if ((_settings.get('geminiApiKey') ?? '').isEmpty) {
       await _settings.put('geminiApiKey', _defaultGeminiKey);
+    }
+
+    // Pre-seed music setting to ON by default
+    if (_settings.get('isMusicEnabled') == null) {
+      await _settings.put('isMusicEnabled', 'true');
     }
   }
 
@@ -69,8 +75,23 @@ class HiveService {
 
   static UserModel? get currentUser {
     final username = currentUsername;
-    if (username == null) return null;
-    return getUserByUsername(username);
+    if (username != null) {
+      return getUserByUsername(username);
+    }
+    
+    // Recovery Logic: If no session but users exist, auto-login the first one
+    if (_users.isNotEmpty) {
+      try {
+        final firstRaw = _users.values.first;
+        final recovered = UserModel.fromJson(jsonDecode(firstRaw));
+        // Silently restore session
+        saveSession(recovered);
+        return recovered;
+      } catch (e) {
+        debugPrint("Recovery Error: $e");
+      }
+    }
+    return null;
   }
 
   // ─── Logs ──────────────────────────────────────────────────
@@ -115,5 +136,23 @@ class HiveService {
 
   static String get language => _settings.get('language') ?? 'en';
   static Future<void> setLanguage(String lang) => _settings.put('language', lang);
+
+  static bool get isSoundEnabled => _settings.get('isSoundEnabled') != 'false';
+  static Future<void> setSoundEnabled(bool enabled) => _settings.put('isSoundEnabled', enabled ? 'true' : 'false');
+
+  static bool get isMusicEnabled => _settings.get('isMusicEnabled') == 'true' || _settings.get('isMusicEnabled') == null;
+  static Future<void> setMusicEnabled(bool enabled) => _settings.put('isMusicEnabled', enabled ? 'true' : 'false');
+
+  static bool get isTtsEnabled => _settings.get('isTtsEnabled') != 'false';
+  static Future<void> setTtsEnabled(bool enabled) => _settings.put('isTtsEnabled', enabled ? 'true' : 'false');
+
+  static double get musicVolume => double.tryParse(_settings.get('musicVolume') ?? '0.55') ?? 0.55;
+  static Future<void> setMusicVolume(double vol) => _settings.put('musicVolume', vol.toString());
+
+  static double get sfxVolume => double.tryParse(_settings.get('sfxVolume') ?? '0.8') ?? 0.8;
+  static Future<void> setSfxVolume(double vol) => _settings.put('sfxVolume', vol.toString());
+
+  static double get voiceVolume => double.tryParse(_settings.get('voiceVolume') ?? '1.0') ?? 1.0;
+  static Future<void> setVoiceVolume(double vol) => _settings.put('voiceVolume', vol.toString());
 }
 

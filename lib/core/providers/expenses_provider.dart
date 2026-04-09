@@ -45,6 +45,8 @@ class ExpensesNotifier extends StateNotifier<List<ExpenseItem>> {
     }
     return map;
   }
+
+  bool get hasUnsynced => state.any((e) => !e.isSynced);
 }
 
 final expensesProvider = StateNotifierProvider<ExpensesNotifier, List<ExpenseItem>>(
