@@ -3,29 +3,36 @@
 # 1. Stop on any error
 set -e
 
-# 2. SECURITY: Tell Git to trust the directories we create on Vercel
+# 2. IDENTITY FIX: Ensure Flutter knows exactly who is running it
+# This clears the "Woah! You appear to be trying to run flutter as root" warning
+echo "🏗️ Setting up user permissions for $(whoami)..."
 git config --global --add safe.directory '*'
 
-echo "📦 Upgrading to newest Flutter Power-Pack (Stable 3.27.3)..."
+echo "📦 Downloading Flutter Power-Pack (Stable 3.27.3)..."
 
-# 3. Download the NEWEST version to support permission_handler and Dart 3.5+
-curl -O https://storage.googleapis.com/flutter_infra_release/releases/stable/linux/flutter_linux_3.27.3-stable.tar.xz
+# 3. Download and unwrap
+if [ ! -d "flutter" ]; then
+  curl -O https://storage.googleapis.com/flutter_infra_release/releases/stable/linux/flutter_linux_3.27.3-stable.tar.xz
+  tar xf flutter_linux_3.27.3-stable.tar.xz
+fi
 
-echo "🔓 Unwrapping the new engine..."
-tar xf flutter_linux_3.27.3-stable.tar.xz
+# 4. PERMISSION RESET
+# This is the "Master Key" for Vercel permissions
+chown -R $(whoami) . || true
 
-# 4. Add to path
+# 5. Setup Path
 export PATH="$PATH:`pwd`/flutter/bin"
 
 echo "⚙️ Configuring Web..."
 flutter config --no-analytics
 flutter config --enable-web
 
-# 5. Build
+# 6. Build
 echo "📦 Fetching AgriBuddy packages..."
 flutter pub get
 
 echo "🚀 Compiling Web Production Build..."
-flutter build web --release --base-href /
+# Adding --no-pub ensures we don't trigger the root check twice
+flutter build web --release --base-href / --no-pub
 
 echo "✅ Success! AgriBuddy is LIVE."
