@@ -318,7 +318,7 @@ class _AddLogSheetState extends State<_AddLogSheet> {
 
           // Type dropdown
           DropdownButtonFormField<String>(
-            initialValue: _type,
+            value: _type,
             decoration: InputDecoration(
               labelText: widget.ref.t('Activity Type'),
               contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),

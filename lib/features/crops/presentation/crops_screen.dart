@@ -313,7 +313,7 @@ class _AddCropSheetState extends State<_AddCropSheet> {
           health: 0.75,
           plantedDate: _planted,
           expectedHarvestDate: _harvest,
-          colorValue: _color.toARGB32(),
+          colorValue: _color.value,
         ));
     Navigator.pop(context);
     ScaffoldMessenger.of(context)
@@ -372,7 +372,7 @@ class _AddCropSheetState extends State<_AddCropSheet> {
             const SizedBox(height: 12),
 
             DropdownButtonFormField<String>(
-              initialValue: _stage,
+              value: _stage,
               decoration: InputDecoration(
                   labelText: widget.ref.t('Growth Stage'),
                   contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),

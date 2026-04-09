@@ -88,7 +88,7 @@ class _AddTaskSheetState extends State<AddTaskSheet> {
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)))),
         const SizedBox(height: 16),
         DropdownButtonFormField<String>(
-          initialValue: _category,
+          value: _category,
           decoration: InputDecoration(
               labelText: widget.ref.t('Category'),
               contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
@@ -132,7 +132,7 @@ class _AddTaskSheetState extends State<AddTaskSheet> {
           ),
         if (crops.isNotEmpty) const SizedBox(height: 12),
         DropdownButtonFormField<String>(
-          initialValue: _repeat,
+          value: _repeat,
           decoration: InputDecoration(
               labelText: widget.ref.t('Repeat'),
               prefixIcon: const Icon(LucideIcons.refreshCw, size: 18),

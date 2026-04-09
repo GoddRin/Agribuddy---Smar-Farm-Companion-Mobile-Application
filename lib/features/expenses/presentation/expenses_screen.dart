@@ -272,7 +272,7 @@ class _AddExpenseSheetState extends State<_AddExpenseSheet> {
         Text(widget.ref.t('Add Expense'), style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold)),
         const SizedBox(height: 16),
         DropdownButtonFormField<String>(
-          initialValue: _category,
+          value: _category,
           decoration: InputDecoration(labelText: widget.ref.t('Category'), prefixIcon: const Icon(LucideIcons.tag, size: 18), border: OutlineInputBorder(borderRadius: BorderRadius.circular(14))),
           items: expenseCategories.map((c) => DropdownMenuItem(value: c, child: Text(widget.ref.t(c)))).toList(),
           onChanged: (v) => setState(() => _category = v!),
