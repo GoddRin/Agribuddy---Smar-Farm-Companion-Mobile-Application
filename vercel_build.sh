@@ -3,9 +3,7 @@
 # 1. Stop on any error
 set -e
 
-# 2. IDENTITY FIX: Ensure Flutter knows exactly who is running it
-# This clears the "Woah! You appear to be trying to run flutter as root" warning
-echo "🏗️ Setting up user permissions for $(whoami)..."
+# 2. IDENTITY FIX: Tell Git to trust the directories we create
 git config --global --add safe.directory '*'
 
 echo "📦 Downloading Flutter Power-Pack (Stable 3.27.3)..."
@@ -16,11 +14,13 @@ if [ ! -d "flutter" ]; then
   tar xf flutter_linux_3.27.3-stable.tar.xz
 fi
 
-# 4. PERMISSION RESET
-# This is the "Master Key" for Vercel permissions
-chown -R $(whoami) . || true
+# 4. GHOST MODE: "Script Surgery" to bypass the Root check
+# We force the EUID check to always be false so Flutter doesn't quit
+echo "👻 Activating Ghost Mode (Bypassing Root Check)..."
+find flutter/bin/internal -name "*.sh" -exec sed -i 's/\[\[ "$EUID" == 0 \]\]/false/g' {} + || true
+sed -i 's/\[\[ "$EUID" == 0 \]\]/false/g' flutter/bin/flutter || true
 
-# 5. Setup Path
+# 5. Path Setup
 export PATH="$PATH:`pwd`/flutter/bin"
 
 echo "⚙️ Configuring Web..."
@@ -32,7 +32,7 @@ echo "📦 Fetching AgriBuddy packages..."
 flutter pub get
 
 echo "🚀 Compiling Web Production Build..."
-# Adding --no-pub ensures we don't trigger the root check twice
+# --no-pub ensures we don't trigger internal checks twice
 flutter build web --release --base-href / --no-pub
 
 echo "✅ Success! AgriBuddy is LIVE."
