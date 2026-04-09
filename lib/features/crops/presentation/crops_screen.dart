@@ -313,6 +313,7 @@ class _AddCropSheetState extends State<_AddCropSheet> {
           health: 0.75,
           plantedDate: _planted,
           expectedHarvestDate: _harvest,
+          // ignore: deprecated_member_use
           colorValue: _color.value,
         ));
     Navigator.pop(context);
@@ -372,6 +373,7 @@ class _AddCropSheetState extends State<_AddCropSheet> {
             const SizedBox(height: 12),
 
             DropdownButtonFormField<String>(
+            // ignore: deprecated_member_use
               value: _stage,
               decoration: InputDecoration(
                   labelText: widget.ref.t('Growth Stage'),

@@ -317,6 +317,7 @@ class _AddLogSheetState extends State<_AddLogSheet> {
           const SizedBox(height: 16),
 
           // Type dropdown
+          // ignore: deprecated_member_use
           DropdownButtonFormField<String>(
             value: _type,
             decoration: InputDecoration(

@@ -57,6 +57,7 @@ class Crop {
     id: j['id'], name: j['name'], block: j['block'], stage: j['stage'],
     health: (j['health'] as num).toDouble(), plantedDate: j['plantedDate'],
     expectedHarvestDate: j['expectedHarvestDate'],
+    // ignore: deprecated_member_use
     colorValue: j['colorValue'] ?? Colors.green.value,
   );
 }
@@ -84,8 +85,11 @@ class CropNotifier extends StateNotifier<List<Crop>> {
     } else {
       // Default sample crops
       final defaults = [
+        // ignore: deprecated_member_use
         Crop(id: '1', name: 'Corn', block: 'Block A', stage: 'Vegetative', health: 0.85, plantedDate: '2026-03-01', expectedHarvestDate: '2026-06-01', colorValue: Colors.orange.value),
+        // ignore: deprecated_member_use
         Crop(id: '2', name: 'Tomato', block: 'Block B', stage: 'Flowering', health: 0.70, plantedDate: '2026-03-10', expectedHarvestDate: '2026-05-15', colorValue: Colors.red.value),
+        // ignore: deprecated_member_use
         Crop(id: '3', name: 'Pechay', block: 'Block C', stage: 'Seedling', health: 0.80, plantedDate: '2026-03-25', expectedHarvestDate: '2026-04-20', colorValue: Colors.teal.value),
       ];
       state = defaults;

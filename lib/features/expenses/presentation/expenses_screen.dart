@@ -271,6 +271,7 @@ class _AddExpenseSheetState extends State<_AddExpenseSheet> {
         const SizedBox(height: 20),
         Text(widget.ref.t('Add Expense'), style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold)),
         const SizedBox(height: 16),
+        // ignore: deprecated_member_use
         DropdownButtonFormField<String>(
           value: _category,
           decoration: InputDecoration(labelText: widget.ref.t('Category'), prefixIcon: const Icon(LucideIcons.tag, size: 18), border: OutlineInputBorder(borderRadius: BorderRadius.circular(14))),

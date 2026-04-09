@@ -87,6 +87,7 @@ class _AddTaskSheetState extends State<AddTaskSheet> {
                 prefixIcon: const Icon(LucideIcons.checkCircle, size: 22),
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)))),
         const SizedBox(height: 16),
+        // ignore: deprecated_member_use
         DropdownButtonFormField<String>(
           value: _category,
           decoration: InputDecoration(
@@ -131,6 +132,7 @@ class _AddTaskSheetState extends State<AddTaskSheet> {
             }),
           ),
         if (crops.isNotEmpty) const SizedBox(height: 12),
+        // ignore: deprecated_member_use
         DropdownButtonFormField<String>(
           value: _repeat,
           decoration: InputDecoration(
