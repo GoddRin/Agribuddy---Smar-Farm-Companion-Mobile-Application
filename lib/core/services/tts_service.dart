@@ -167,7 +167,6 @@ class TtsService {
 
       await _tts.speak(
         cleanedText,
-        focus: !kIsWeb && defaultTargetPlatform == TargetPlatform.android,
       );
     } catch (e) {
       debugPrint('❌ TTS Speak Exception: $e');

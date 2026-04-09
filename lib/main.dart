@@ -69,47 +69,54 @@ class _SmartFarmAppState extends ConsumerState<SmartFarmApp> with WidgetsBinding
     final settings = ref.watch(settingsProvider);
     final isDark = settings['isDarkMode'] == 'true';
 
-    return MaterialApp.router(
-      title: 'AgriBuddy',
-      debugShowCheckedModeBanner: false,
-      theme: AppTheme.lightTheme,
-      darkTheme: AppTheme.darkTheme,
-      themeMode: isDark ? ThemeMode.dark : ThemeMode.light,
-      routerConfig: router,
-      builder: (context, child) {
-        return LayoutBuilder(
-          builder: (context, constraints) {
-            // Desktop Simulator Mode
-            if (constraints.maxWidth > 600) {
-              return Container(
-                color: const Color(0xFF16A34A).withValues(alpha: 0.05), // Subtle farm background
-                child: Center(
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 1024),
-                    child: Container(
-                      decoration: BoxDecoration(
-                        color: Theme.of(context).scaffoldBackgroundColor,
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.15),
-                            blurRadius: 50,
-                            spreadRadius: 2,
-                            offset: const Offset(0, 10),
-                          )
-                        ],
+    return Listener(
+      onPointerDown: (_) {
+        if (kIsWeb) {
+          ref.read(audioServiceProvider).unlockWebAudio();
+        }
+      },
+      child: MaterialApp.router(
+        title: 'AgriBuddy',
+        debugShowCheckedModeBanner: false,
+        theme: AppTheme.lightTheme,
+        darkTheme: AppTheme.darkTheme,
+        themeMode: isDark ? ThemeMode.dark : ThemeMode.light,
+        routerConfig: router,
+        builder: (context, child) {
+          return LayoutBuilder(
+            builder: (context, constraints) {
+              // Desktop Simulator Mode
+              if (constraints.maxWidth > 1024) {
+                return Container(
+                  color: const Color(0xFF16A34A).withValues(alpha: 0.05), // Subtle farm background
+                  child: Center(
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 1024),
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: Theme.of(context).scaffoldBackgroundColor,
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.15),
+                              blurRadius: 50,
+                              spreadRadius: 2,
+                              offset: const Offset(0, 10),
+                            )
+                          ],
+                        ),
+                        child: ClipRect(child: child!),
                       ),
-                      child: ClipRect(child: child!),
                     ),
                   ),
-                ),
-              );
-            }
-            
-            // Mobile (Native) Mode
-            return child!;
-          },
-        );
-      },
+                );
+              }
+              
+              // Mobile (Native) Mode
+              return child!;
+            },
+          );
+        },
+      ),
     );
   }
 }

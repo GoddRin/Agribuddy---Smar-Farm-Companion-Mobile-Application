@@ -23,6 +23,7 @@ class AudioService {
   /// True from [beginSpeechRecognition] until [endSpeechRecognition] (pairs with BGM pause).
   bool _speechRecognitionCycleActive = false;
   bool _bgmPausedForSpeechRecognition = false;
+  bool _webAudioExplicitlyUnlocked = false;
 
   AudioService(this._ref) {
     _bgmPlayer = AudioPlayer();
@@ -37,8 +38,8 @@ class AudioService {
 
     unawaited(_preloadTapSfx());
 
-    // 1. Start the music immediately if enabled (Default ON)
-    startBgm();
+    // 1. Start the music (on web this will fail until the first user click)
+    unawaited(startBgm());
 
     // 2. Listen to setting changes to stop or START music
     _ref.listen<Map<String, String>>(settingsProvider, (prev, next) {
@@ -102,12 +103,49 @@ class AudioService {
     if (_bgmPlayer.playing) return;
 
     try {
-      await _bgmPlayer.setAsset('assets/audio/music/bgm_farm.mp3');
+      if (kIsWeb) {
+        // Just-audio on web can be fussy about loading state during autoplay block
+        await _bgmPlayer.setAsset('assets/audio/music/bgm_farm.mp3', preload: true);
+      } else {
+        await _bgmPlayer.setAsset('assets/audio/music/bgm_farm.mp3');
+      }
+      
       await _bgmPlayer.setLoopMode(LoopMode.one);
       await _bgmPlayer.setVolume(settings.musicVolume);
-      await _bgmPlayer.play();
+      
+      final playFuture = _bgmPlayer.play();
+      if (kIsWeb) {
+        // Catch the 'NotAllowedError' silently on web. 
+        // We will retry once the user clicks.
+        unawaited(playFuture.catchError((e) {
+          debugPrint("BGM Autoplay Blocked (Wait for click): $e");
+          return null;
+        }));
+      } else {
+        await playFuture;
+      }
     } catch (e) {
       debugPrint("Error playing BGM: $e");
+    }
+  }
+
+  /// WEB ONLY: Call this on the very first user interaction to 'prime' the audio context.
+  Future<void> unlockWebAudio() async {
+    if (!kIsWeb || _webAudioExplicitlyUnlocked) return;
+    _webAudioExplicitlyUnlocked = true;
+    
+    debugPrint("🔊 Unlocking Web Audio Context...");
+    try {
+      // 1. Prime the SFX player with a silent load/play
+      await _sfxTapPlayer.setVolume(0.0);
+      await _sfxTapPlayer.play();
+      await _sfxTapPlayer.stop();
+      await _sfxTapPlayer.setVolume(_ref.read(settingsProvider.notifier).sfxVolume);
+      
+      // 2. Force-start the BGM now that we have an interaction token
+      await startBgm();
+    } catch (e) {
+      debugPrint("Web Audio Unlock Failed: $e");
     }
   }
 
