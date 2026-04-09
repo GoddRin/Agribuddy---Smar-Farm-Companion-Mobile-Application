@@ -1,21 +1,31 @@
 #!/bin/bash
 
-# Vercel doesn't have Flutter pre-installed, so we grab it directly from GitHub!
-echo "⬇️ Cloning Flutter SDK (Stable Channel)..."
-git clone https://github.com/flutter/flutter.git -b stable
+# 1. Exit immediately if a command exits with a non-zero status
+set -e
 
-# Add Flutter to the temporary server environment path
+echo "快速开始: Installing Flutter SDK (Shallow Clone for speed)..."
+
+# 2. Only clone the latest stable commit to save memory/time
+if [ ! -d "flutter" ]; then
+  git clone https://github.com/flutter/flutter.git -b stable --depth 1
+fi
+
+# 3. Add Flutter to the path
 export PATH="$PATH:`pwd`/flutter/bin"
 
-# Ensure we're ready
-echo "⚙️ Configuring Flutter..."
+echo "⚙️ Configuring Flutter Web..."
 flutter config --no-analytics
+flutter config --enable-web
 
-# Get dependencies and build!
+# 4. Pre-download the Web SDK to avoid timeouts during build
+echo "🚚 Pre-loading Web SDK..."
+flutter precache --web
+
+# 5. Build
 echo "📦 Fetching packages..."
 flutter pub get
 
 echo "🚀 Building Web Release..."
-flutter build web --release
+flutter build web --release --base-href /
 
-echo "✅ Build Complete!"
+echo "✅ Build Complete! Files are ready in build/web"
