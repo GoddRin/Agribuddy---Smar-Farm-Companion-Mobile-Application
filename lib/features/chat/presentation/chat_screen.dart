@@ -8,7 +8,7 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
 import 'package:lucide_icons/lucide_icons.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
+
 import '../../../core/providers/crop_provider.dart';
 import '../../../core/providers/auth_provider.dart';
 import '../../../core/localization/app_localizations.dart';
@@ -393,8 +393,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with TickerProviderStat
     });
     _scrollToBottom();
     // Obfuscated key to bypass GitHub secret scanner for portfolio app
-    const _r = 'tt8lkiF3yurXPUVs9yUj6WBYF3bydGWDgscjMPADvueFkDIq09c_ksg';
-    final apiKey = _r.split('').reversed.join();
+    const r = 'tt8lkiF3yurXPUVs9yUj6WBYF3bydGWDgscjMPADvueFkDIq09c_ksg';
+    final apiKey = r.split('').reversed.join();
     
     if (apiKey.isNotEmpty) {
       await _groqReply(text, apiKey);
