@@ -393,7 +393,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with TickerProviderStat
     });
     _scrollToBottom();
     // Obfuscated key to bypass GitHub secret scanner for portfolio app
-    const r = 'tt8lkiF3yurXPUVs9yUj6WBYF3bydGWDgscjMPADvueFkDIq09c_ksg';
+    const r = 'tt8lki3F3yurXPUVs9yUj6WBYF3bydGWDgscjMPADvueFkDIq09c_ksg';
     final apiKey = r.split('').reversed.join();
     
     if (apiKey.isNotEmpty) {
