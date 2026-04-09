@@ -85,15 +85,15 @@ class _SmartFarmAppState extends ConsumerState<SmartFarmApp> with WidgetsBinding
                 color: const Color(0xFF16A34A).withValues(alpha: 0.05), // Subtle farm background
                 child: Center(
                   child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 450),
+                    constraints: const BoxConstraints(maxWidth: 1024),
                     child: Container(
                       decoration: BoxDecoration(
                         color: Theme.of(context).scaffoldBackgroundColor,
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.1),
-                            blurRadius: 40,
-                            spreadRadius: 5,
+                            color: Colors.black.withValues(alpha: 0.15),
+                            blurRadius: 50,
+                            spreadRadius: 2,
                             offset: const Offset(0, 10),
                           )
                         ],

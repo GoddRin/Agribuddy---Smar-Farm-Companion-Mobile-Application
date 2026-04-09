@@ -75,8 +75,15 @@ class HiveService {
 
   static UserModel? get currentUser {
     final username = currentUsername;
+    debugPrint("HiveSession: Checking persistence... currentUsername: $username");
+    
     if (username != null) {
-      return getUserByUsername(username);
+      final u = getUserByUsername(username);
+      if (u != null) {
+        debugPrint("HiveSession: Restored session for @${u.username}");
+        return u;
+      }
+      debugPrint("HiveSession: Username found but user data missing in box!");
     }
     
     // Recovery Logic: If no session but users exist, auto-login the first one
@@ -84,13 +91,15 @@ class HiveService {
       try {
         final firstRaw = _users.values.first;
         final recovered = UserModel.fromJson(jsonDecode(firstRaw));
+        debugPrint("HiveSession: Recovered user @${recovered.username} from box (Auto-login)");
         // Silently restore session
         saveSession(recovered);
         return recovered;
       } catch (e) {
-        debugPrint("Recovery Error: $e");
+        debugPrint("HiveSession: Recovery Error: $e");
       }
     }
+    debugPrint("HiveSession: No session or user data found.");
     return null;
   }
 

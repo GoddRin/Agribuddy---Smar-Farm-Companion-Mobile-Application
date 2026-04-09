@@ -20,16 +20,16 @@ class AuthNotifier extends StateNotifier<AuthState> {
   }
 
   void _init() {
+    debugPrint("AuthNotifier: Starting session recovery...");
     final user = HiveService.currentUser;
+    
     if (user != null) {
-      debugPrint("Auth Init: User recognized -> ${user.username}");
+      debugPrint("AuthNotifier: Session restored for @${user.username}");
+      state = AuthState(status: AuthStatus.authenticated, user: user);
     } else {
-      debugPrint("Auth Init: No active session found.");
+      debugPrint("AuthNotifier: No session found, redirecting to login.");
+      state = const AuthState(status: AuthStatus.unauthenticated);
     }
-    state = AuthState(
-      status: user != null ? AuthStatus.authenticated : AuthStatus.unauthenticated,
-      user: user,
-    );
   }
 
   Future<String?> register({
